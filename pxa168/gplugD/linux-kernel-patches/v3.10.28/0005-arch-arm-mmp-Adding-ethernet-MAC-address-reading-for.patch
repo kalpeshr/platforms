@@ -1,0 +1,68 @@
+From 3acf27bf1afd852bf17d57883bcf23dcc3494e6c Mon Sep 17 00:00:00 2001
+From: Ashokkumar G <0xfee1dead.sa@gmail.com>
+Date: Mon, 27 Jan 2014 10:21:42 -0700
+Subject: [PATCH 05/11] arch:arm:mmp: Adding ethernet MAC address reading for
+ gplugd
+
+pxa168 based gplugd uses serial number tag for ethernet
+MAC address. Adding support to read MAC address in gplugd.c
+---
+ arch/arm/mach-mmp/gplugd.c |   14 ++++++++++++++
+ include/linux/pxa168_eth.h |    2 ++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/arch/arm/mach-mmp/gplugd.c b/arch/arm/mach-mmp/gplugd.c
+index 9c441e1..4f0347c 100644
+--- a/arch/arm/mach-mmp/gplugd.c
++++ b/arch/arm/mach-mmp/gplugd.c
+@@ -17,6 +17,7 @@
+ 
+ #include <asm/mach/arch.h>
+ #include <asm/mach-types.h>
++#include <asm/system.h>
+ 
+ #include <mach/irqs.h>
+ #include <mach/pxa168.h>
+@@ -226,6 +227,18 @@ static inline int pxa168_add_spi(int id, struct pxa2xx_spi_master *pdata)
+ 
+ 	return platform_device_add(pd);
+ }
++/* gplugD uses serial number tag to pass MAC address */
++static void __init read_store_mac_addr(void)
++{
++	int i;
++	u8 *mac_addr = gplugd_eth_platform_data.mac_addr;
++
++	*mac_addr++ = (system_serial_high >> 8) & 0xff;
++	*mac_addr++ = system_serial_high & 0xff;
++
++	for (i = 3; i >= 0; i--)
++		*mac_addr++ = (system_serial_low >> i*8) & 0xff;
++}
+ 
+ static void __init gplugd_init(void)
+ {
+@@ -243,6 +256,7 @@ static void __init gplugd_init(void)
+ 
+ 	pxa168_add_twsi(0, &i2c_info, ARRAY_AND_SIZE(gplugd_i2c_board_info));
+ 
++	read_store_mac_addr();
+ 	pxa168_add_eth(&gplugd_eth_platform_data);
+ 
+ 	pxa168_add_ssp(2);
+diff --git a/include/linux/pxa168_eth.h b/include/linux/pxa168_eth.h
+index 18d75e7..2df91c5 100644
+--- a/include/linux/pxa168_eth.h
++++ b/include/linux/pxa168_eth.h
+@@ -20,6 +20,8 @@ struct pxa168_eth_platform_data {
+ 	int	rx_queue_size;
+ 	int	tx_queue_size;
+ 
++	u8	mac_addr[6];	/* mac address if non-zero*/
++
+ 	/*
+ 	 * init callback is used for board specific initialization
+ 	 * e.g on Aspenite its used to initialize the PHY transceiver.
+-- 
+1.7.9.5
+

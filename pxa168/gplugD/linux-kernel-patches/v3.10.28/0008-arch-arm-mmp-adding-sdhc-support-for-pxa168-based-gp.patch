@@ -1,0 +1,118 @@
+From 1efd63a2ba757e124a78b2b88712ae317bb02981 Mon Sep 17 00:00:00 2001
+From: Ashokkumar G <0xfee1dead.sa@gmail.com>
+Date: Mon, 27 Jan 2014 11:18:05 -0700
+Subject: [PATCH 08/11] arch:arm:mmp: adding sdhc support for pxa168 based
+ gplugd
+
+---
+ arch/arm/mach-mmp/Kconfig               |    1 +
+ arch/arm/mach-mmp/gplugd.c              |    7 +++++++
+ arch/arm/mach-mmp/include/mach/pxa168.h |   20 ++++++++++++++++++++
+ arch/arm/mach-mmp/pxa168.c              |    4 ++++
+ 4 files changed, 32 insertions(+)
+
+diff --git a/arch/arm/mach-mmp/Kconfig b/arch/arm/mach-mmp/Kconfig
+index ebdda83..c4c1738 100644
+--- a/arch/arm/mach-mmp/Kconfig
++++ b/arch/arm/mach-mmp/Kconfig
+@@ -80,6 +80,7 @@ config MACH_TETON_BGA
+ config MACH_GPLUGD
+ 	bool "Marvell's PXA168 GuruPlug Display (gplugD) Board"
+ 	select CPU_PXA168
++	select MMC
+ 	help
+ 	  Say 'Y' here if you want to support the Marvell PXA168-based
+ 	  GuruPlug Display (gplugD) Board
+diff --git a/arch/arm/mach-mmp/gplugd.c b/arch/arm/mach-mmp/gplugd.c
+index 4f0347c..14a7831 100644
+--- a/arch/arm/mach-mmp/gplugd.c
++++ b/arch/arm/mach-mmp/gplugd.c
+@@ -12,6 +12,7 @@
+ #include <linux/platform_device.h>
+ #include <linux/gpio.h>
+ #include <linux/gpio-pxa.h>
++#include <linux/mmc/sdhci.h>
+ #include <linux/spi/spi.h>
+ #include <linux/spi/pxa2xx_spi.h>
+ 
+@@ -168,6 +169,10 @@ struct pxa168_eth_platform_data gplugd_eth_platform_data = {
+ 	.init        = gplugd_eth_init,
+ };
+ 
++struct sdhci_pxa_platdata gplugd_sdh_platdata = {
++	.quirks = SDHCI_QUIRK_NO_HISPD_BIT | SDHCI_QUIRK_NO_BUSY_IRQ | SDHCI_QUIRK_32BIT_DMA_SIZE,
++};
++
+ static void __init select_disp_freq(void)
+ {
+ 	/* set GPIO 35 & clear GPIO 85 to set LCD External Clock to 74.25 MHz */
+@@ -259,6 +264,8 @@ static void __init gplugd_init(void)
+ 	read_store_mac_addr();
+ 	pxa168_add_eth(&gplugd_eth_platform_data);
+ 
++	pxa168_add_sdh(1, &gplugd_sdh_platdata);
++	pxa168_add_sdh(2, &gplugd_sdh_platdata);
+ 	pxa168_add_ssp(2);
+ 
+ 	pxa168_add_spi(2, &pxa_ssp_master_info);
+diff --git a/arch/arm/mach-mmp/include/mach/pxa168.h b/arch/arm/mach-mmp/include/mach/pxa168.h
+index 7ed1df2..009f027 100644
+--- a/arch/arm/mach-mmp/include/mach/pxa168.h
++++ b/arch/arm/mach-mmp/include/mach/pxa168.h
+@@ -14,6 +14,7 @@ extern void pxa168_clear_keypad_wakeup(void);
+ #include <linux/platform_data/keypad-pxa27x.h>
+ #include <mach/cputype.h>
+ #include <linux/pxa168_eth.h>
++#include <linux/platform_data/pxa_sdhci.h>
+ #include <linux/platform_data/mv_usb.h>
+ 
+ extern struct pxa_device_desc pxa168_device_uart1;
+@@ -34,6 +35,10 @@ extern struct pxa_device_desc pxa168_device_nand;
+ extern struct pxa_device_desc pxa168_device_fb;
+ extern struct pxa_device_desc pxa168_device_keypad;
+ extern struct pxa_device_desc pxa168_device_eth;
++extern struct pxa_device_desc pxa168_device_sdh1;
++extern struct pxa_device_desc pxa168_device_sdh2;
++extern struct pxa_device_desc pxa168_device_sdh3;
++extern struct pxa_device_desc pxa168_device_sdh4;
+ 
+ /* pdata can be NULL */
+ extern int __init pxa168_add_usb_host(struct mv_usb_platform_data *pdata);
+@@ -131,4 +136,19 @@ static inline int pxa168_add_eth(struct pxa168_eth_platform_data *data)
+ {
+ 	return pxa_register_device(&pxa168_device_eth, data, sizeof(*data));
+ }
++
++static inline int pxa168_add_sdh(int id, struct sdhci_pxa_platdata *data)
++{
++	struct pxa_device_desc *d = NULL;
++
++	switch (id) {
++	case 1: d = &pxa168_device_sdh1; break;
++	case 2: d = &pxa168_device_sdh2; break;
++	case 3: d = &pxa168_device_sdh3; break;
++	case 4: d = &pxa168_device_sdh4; break;
++	default:
++		return -EINVAL;
++	}
++	return pxa_register_device(d, data, sizeof(*data));
++}
+ #endif /* __ASM_MACH_PXA168_H */
+diff --git a/arch/arm/mach-mmp/pxa168.c b/arch/arm/mach-mmp/pxa168.c
+index a30dcf3..84d8c33 100644
+--- a/arch/arm/mach-mmp/pxa168.c
++++ b/arch/arm/mach-mmp/pxa168.c
+@@ -110,6 +110,10 @@ PXA168_DEVICE(ssp5, "pxa168-ssp", 4, SSP5, 0xd4021000, 0x40, 60, 61);
+ PXA168_DEVICE(fb, "pxa168-fb", -1, LCD, 0xd420b000, 0x1c8);
+ PXA168_DEVICE(keypad, "pxa27x-keypad", -1, KEYPAD, 0xd4012000, 0x4c);
+ PXA168_DEVICE(eth, "pxa168-eth", -1, MFU, 0xc0800000, 0x0fff);
++PXA168_DEVICE(sdh1, "sdhci-pxav2", 0, SDH1, 0xd4280000, 0x100);
++PXA168_DEVICE(sdh2, "sdhci-pxav2", 1, SDH1, 0xd4281000, 0x100);
++PXA168_DEVICE(sdh3, "sdhci-pxav2", 2, SDH2, 0xd427e000, 0x100);
++PXA168_DEVICE(sdh4, "sdhci-pxav2", 3, SDH2, 0xd427f000, 0x100);
+ 
+ struct resource pxa168_resource_gpio[] = {
+ 	{
+-- 
+1.7.9.5
+

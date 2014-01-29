@@ -1,0 +1,61 @@
+From 63b21d13a7467f9878bb6312f95df33dd78b2de4 Mon Sep 17 00:00:00 2001
+From: Ashokkumar G <0xfee1dead.sa@gmail.com>
+Date: Mon, 27 Jan 2014 10:30:32 -0700
+Subject: [PATCH 06/11] drivers:net:ethernet: Add support to read MAC address
+ for pxa168
+
+currently Marvell's pxa168 ethernet driver uses random MAC address
+by default instead of reading MAC address from serial number tag.
+Adding support to uses MAC address provided instead of random MAC
+address by default
+---
+ drivers/net/ethernet/marvell/pxa168_eth.c |   18 +++++++++++++-----
+ 1 file changed, 13 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/net/ethernet/marvell/pxa168_eth.c b/drivers/net/ethernet/marvell/pxa168_eth.c
+index 1c8af8b..d9fce08 100644
+--- a/drivers/net/ethernet/marvell/pxa168_eth.c
++++ b/drivers/net/ethernet/marvell/pxa168_eth.c
+@@ -1482,7 +1482,7 @@ static int pxa168_eth_probe(struct platform_device *pdev)
+ 			DRIVER_NAME);
+ 		return -ENODEV;
+ 	}
+-	clk_enable(clk);
++	clk_prepare_enable(clk);
+ 
+ 	dev = alloc_etherdev(sizeof(struct pxa168_eth_private));
+ 	if (!dev) {
+@@ -1514,10 +1514,18 @@ static int pxa168_eth_probe(struct platform_device *pdev)
+ 
+ 	INIT_WORK(&pep->tx_timeout_task, pxa168_eth_tx_timeout_task);
+ 
+-	printk(KERN_INFO "%s:Using random mac address\n", DRIVER_NAME);
+-	eth_hw_addr_random(dev);
+-
+ 	pep->pd = pdev->dev.platform_data;
++
++	if (pep->pd->init)
++		pep->pd->init();
++
++	if (is_valid_ether_addr(pep->pd->mac_addr)){
++		memcpy(dev->dev_addr, pep->pd->mac_addr, 6);
++	} else {
++		printk(KERN_INFO "%s:Using random mac address\n", DRIVER_NAME);
++		eth_hw_addr_random(dev);
++	}
++
+ 	pep->rx_ring_size = NUM_RX_DESCS;
+ 	if (pep->pd->rx_queue_size)
+ 		pep->rx_ring_size = pep->pd->rx_queue_size;
+@@ -1572,7 +1580,7 @@ err_base:
+ err_netdev:
+ 	free_netdev(dev);
+ err_clk:
+-	clk_disable(clk);
++	clk_disable_unprepare(clk);
+ 	clk_put(clk);
+ 	return err;
+ }
+-- 
+1.7.9.5
+
