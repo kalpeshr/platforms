@@ -1,3 +1,3 @@
 Pre-built images for gplugD
-U-boot : MD5
-Kernel : MD5
+U-boot : u-boot.bin :	MD5 b7d5e096e44a7d1497987122f102d71f
+Kernel : zImage :	MD5 37a14937c5ee45883b9c74fad8ce5e7b
